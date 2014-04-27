@@ -57,6 +57,8 @@ $username = $db->getVar("users", "name");
 echo $username;
 ```
 
+or get a list of all users names
+
 ```php
 $cols = array("id, name, email");
 $users = $db->output('array')->get("users", $cols);
