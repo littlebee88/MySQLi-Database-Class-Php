@@ -80,14 +80,6 @@ foreach ($users as $username) {
     echo $username;
 }
 ```
-### Insert Query
-```php
-$data = array (
-	'firstName' => 'Bobby',
-	'lastName' => 'Tables'
-);
-$db->where('id', 1);
-if($db->insert('users', $data)) echo 'successfully inserted';
 
 ### Update Query
 ```php
@@ -107,7 +99,7 @@ if($db->delete('posts')) echo 'successfully deleted';
 
 ### Generic Query Method
 ```php
-$users = $db->query('SELECT * from users');
+$users = $db->output('array')->query('SELECT * from users');
 foreach ($users as $user) {
     print_r ($user);
 }
@@ -205,7 +197,7 @@ $results = $db->get('users');
 // Gives: SELECT * FROM users LIMIT 10, 10;
 ```
 
-### Trasaction Wrappers
+### Transaction Wrappers
 ```php
 $this->beginTransaction();
 
@@ -217,9 +209,11 @@ $db->where('id', 1);
 $res = $db->insert('users', $data)
 
 if(!$res) {
+    //rollback
     echo 'inserted failed';
     $this->rollbackTransaction();
 } else {
+    //end
     echo 'successfully inserted';
     $this->endTransaction();
 }

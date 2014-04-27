@@ -255,7 +255,7 @@ class MysqliDb extends mysqli
         if (empty ($columns)) $columns = '*';
         $columns = is_array($columns) ? $columns : $this->multiExplode($columns, ',');
         $columns = implode(', ', $columns);
-        $this->query = 'SELECT ' . $columns . ' FROM ' . $tableName;
+        $this->query = 'SELECT ' . $columns . ' FROM ' . $this->db_prefix . $tableName;
         $this->processQuery();
         return $this->db_result;
     }
@@ -272,7 +272,7 @@ class MysqliDb extends mysqli
     {
         if (empty ($columns)) $columns = '*';
         $column = is_array($columns) ? implode(', ', $columns) : $columns;
-        $this->query = 'SELECT ' . $column . ' FROM ' . $tableName;
+        $this->query = 'SELECT ' . $column . ' FROM ' . $this->db_prefix . $tableName;
         $this->limit(1);
         $this->processQuery();
         if(is_array($this->db_result) && !empty($this->db_result)){
@@ -319,7 +319,7 @@ class MysqliDb extends mysqli
         if (empty ($columns)) $columns = '*';
 
         $column = is_array($columns) ? implode(', ', $columns) : $columns;
-        $this->query = 'SELECT ' . $column . ' FROM ' . $tableName;
+        $this->query = 'SELECT ' . $column . ' FROM ' . $this->db_prefix . $tableName;
         $this->limit(1);
         $this->output('array');
         $this->processQuery();
@@ -339,7 +339,7 @@ class MysqliDb extends mysqli
      */
     public function insert($tableName, $tableData)
     {
-        $this->query = 'INSERT INTO ' . $tableName;
+        $this->query = 'INSERT INTO ' . $this->db_prefix . $tableName;
         $this->processQuery();
         return $this->db_result;
     }
@@ -354,7 +354,7 @@ class MysqliDb extends mysqli
      */
     public function update($tableName, $tableData)
     {
-        $this->query = 'UPDATE ' . $tableName . ' SET ';
+        $this->query = 'UPDATE ' . $this->db_prefix . $tableName . ' SET ';
         $this->processQuery();
         return $this->db_result;
     }
@@ -368,7 +368,7 @@ class MysqliDb extends mysqli
      */
     public function delete($tableName)
     {
-        $this->query = 'DELETE FROM ' . $tableName;
+        $this->query = 'DELETE FROM ' . $this->db_prefix . $tableName;
         $this->processQuery();
         return $this->db_result;
 
@@ -443,7 +443,7 @@ class MysqliDb extends mysqli
         if ($joinType && !in_array($joinType, $allowedTypes))
             die ('Wrong JOIN type: ' . $joinType);
 
-        $this->join[$joinType . " JOIN " . $joinTable] = $joinCondition;
+        $this->join[$joinType . " JOIN " . $this->db_prefix . $joinTable] = $joinCondition;
 
         return $this;
     }
