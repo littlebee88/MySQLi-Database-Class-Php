@@ -40,7 +40,7 @@ or select with custom columns set. Functions also could be used
 ```php
 $stats = $db->getOne("users", "sum(id), count(*) as cnt");
 echo "total ".$stats->cnt. "users found";
-
+```
 
 or even better just get the count as a field
 
@@ -57,6 +57,7 @@ $username = $db->getVar("users", "name");
 echo $username;
 ```
 
+```php
 $cols = array("id, name, email");
 $users = $db->output('array')->get("users", $cols);
 foreach ($users as $user) { 
