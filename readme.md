@@ -8,6 +8,7 @@ After that, create a new instance of the class.
 
 ```php
 $db = new Mysqlidb('host', 'username', 'password', 'databaseName');
+//optional params port and db prefix
 ```
 
 Next, prepare your data, and call the necessary methods. 
