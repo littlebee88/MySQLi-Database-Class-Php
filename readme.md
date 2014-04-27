@@ -29,30 +29,65 @@ if($id)
 ### Select Query
 
 ```php
-$users = $db->get('users'); //contains an array of all users 
-$users = $db->get('users', 10); //contains an array 10 users
+$users = $db->get('users'); //contains an array of user objects for all users
+$users = $db->output('array')->get('users'); //contains an array of associative arrays for all users
+$users = $db->limit(10)->get('users'); //contains an array 10 users
+$users = $db->offset(10)->limit(10)->get('users'); //contains an array 10 users 11-20
 ```
 
 or select with custom columns set. Functions also could be used
 
 ```php
-$stats = $db->getOne ("users", null, "sum(id), count(*) as cnt");
-echo "total ".$stats['cnt']. "users found";
+$stats = $db->getOne("users", "sum(id), count(*) as cnt");
+echo "total ".$stats->cnt. "users found";
 
-$cols = Array ("id, name, email");
-$users = $db->get ("users", null, $cols);
+
+or even better just get the count as a field
+
+```php
+$cnt = $db->getVar("users", "count(id) as cnt");
+echo $cnt
+```
+
+or get a single users name by id
+
+```php
+$db->where("id", 1);
+$username = $db->getVar("users", "name");
+echo $username;
+```
+
+$cols = array("id, name, email");
+$users = $db->output('array')->get("users", $cols);
 foreach ($users as $user) { 
-    print_r ($user);
+    print_r($user);
 }
 ```
 
 or select just one row
 
 ```php
-$db->where ("id", 1);
-$user = $db->getOne ("users");
-echo $user['id'];
+$db->where("id", 1);
+$user = $db->getOne("users");
+echo $user->id;
 ```
+
+or select just one column
+
+```php
+$user = $db->getCol("users", "name");
+foreach ($users as $username) {
+    echo $username;
+}
+```
+### Insert Query
+```php
+$data = array (
+	'firstName' => 'Bobby',
+	'lastName' => 'Tables'
+);
+$db->where('id', 1);
+if($db->insert('users', $data)) echo 'successfully inserted';
 
 ### Update Query
 ```php
@@ -72,7 +107,7 @@ if($db->delete('posts')) echo 'successfully deleted';
 
 ### Generic Query Method
 ```php
-$users = $db->rawQuery('SELECT * from users');
+$users = $db->query('SELECT * from users');
 foreach ($users as $user) {
     print_r ($user);
 }
@@ -154,4 +189,38 @@ $db->join("users u", "p.tenantID=u.tenantID", "LEFT");
 $db->where("u.id", 6);
 $products = $db->get ("products p", "u.name, p.productName");
 print_r ($products);
+```
+
+### Limit method
+```php
+$db->limit(10);
+$results = $db->get('users');
+// Gives: SELECT * FROM users LIMIT 10;
+```
+
+### Offset method plus Limit method
+```php
+$db->limit(10);
+$results = $db->get('users');
+// Gives: SELECT * FROM users LIMIT 10, 10;
+```
+
+### Trasaction Wrappers
+```php
+$this->beginTransaction();
+
+$data = array (
+	'firstName' => 'Bobby',
+	'lastName' => 'Tables'
+);
+$db->where('id', 1);
+$res = $db->insert('users', $data)
+
+if(!$res) {
+    echo 'inserted failed';
+    $this->rollbackTransaction();
+} else {
+    echo 'successfully inserted';
+    $this->endTransaction();
+}
 ```
