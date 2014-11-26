@@ -4,3 +4,9 @@
 #Vim trash
 *.swp
 .idea*
+
+/.idea/workspace.xml
+
+/.idea/misc.xml
+
+/.idea/mysqli.iml

@@ -43,6 +43,13 @@ class MysqliDb extends mysqli
     protected $where = array();
 
     /**
+     * An array that holds where conditions 'fieldname' => 'value'
+     *
+     * @var array
+     */
+    protected $having = array();
+
+    /**
      * A string that holds a custom where string
      *
      * @var string
@@ -176,6 +183,7 @@ class MysqliDb extends mysqli
             printf("Failed to connect to MySQL: (" . $this->mysqli->connect_errno . ") " . $this->mysqli->connect_error);
             exit();
         }
+
         //$this->mysqli->set_charset('utf8');
         //$this->stmt = $this->mysqli->init();
     }
@@ -188,7 +196,8 @@ class MysqliDb extends mysqli
     protected function reset()
     {
         $this->where = array();
-        $this->customWhere = '';
+        $this->customWhere = array();
+        $this->having = array();
         $this->join = array();
         $this->orderBy = array();
         $this->groupBy = array();
@@ -340,7 +349,7 @@ class MysqliDb extends mysqli
     public function insert($tableName, $tableData)
     {
         $this->query = 'INSERT INTO ' . $this->db_prefix . $tableName;
-        $this->processQuery();
+        $this->processQuery($tableData);
         return $this->db_result;
     }
 
@@ -355,7 +364,7 @@ class MysqliDb extends mysqli
     public function update($tableName, $tableData)
     {
         $this->query = 'UPDATE ' . $this->db_prefix . $tableName . ' SET ';
-        $this->processQuery();
+        $this->processQuery($tableData);
         return $this->db_result;
     }
 
@@ -372,6 +381,21 @@ class MysqliDb extends mysqli
         $this->processQuery();
         return $this->db_result;
 
+    }
+
+    /**
+     * Replace Query
+     *
+     * @param <string $tableName The name of the table.
+     * @param array $tableData Data containing information for inserting into the DB.
+     *
+     * @return boolean Boolean indicating whether the insert query was completed successfully.
+     */
+    public function replace($tableName, $tableData)
+    {
+        $this->query = 'REPLACE INTO ' . $tableName;
+        $this->processQuery($tableData);
+        return $this->db_result;
     }
 
     /**
@@ -395,8 +419,6 @@ class MysqliDb extends mysqli
         return $this;
     }
 
-
-
     /**
      * This method allows you to specify multiple (method chaining optional) WHERE statements for SQL queries.
      *
@@ -410,6 +432,22 @@ class MysqliDb extends mysqli
     public function where($whereProp, $whereValue)
     {
         $this->where[$whereProp] = $whereValue;
+        return $this;
+    }
+
+    /**
+     * This method allows you to specify multiple (method chaining optional) HAVING statements for SQL queries.
+     *
+     * @uses $MySqliDb->having('id', 7)->having('title', 'MyTitle');
+     *
+     * @param string $havingProp The name of the database field.
+     * @param mixed $havingValue The value of the database field.
+     *
+     * @return MySqliDb
+     */
+    public function having($havingProp, $havingValue)
+    {
+        $this->where[$havingProp] = $havingValue;
         return $this;
     }
 
@@ -560,7 +598,8 @@ class MysqliDb extends mysqli
     protected function _determineType($item)
     {
         switch (gettype($item)) {
-            case 'NULL':
+            case 'NULL'==strtoupper($item);
+            case 'NOW()'==strtoupper($item):
             case 'string':
                 return 's';
                 break;
@@ -601,26 +640,63 @@ class MysqliDb extends mysqli
             }
         }
 
+        // Determine if is INSERT query
+        if ($hasTableData) {
+
+            if ((strpos($this->query, 'INSERT') !== false) || (strpos($this->query, 'REPLACE') !== false)) {
+
+                //is insert statement
+                $keys = array_keys($tableData);
+                $values = array_values($tableData);
+                $num = count($keys);
+
+                // wrap values in quotes
+                foreach ($values as $key => $val) {
+                    $values[$key] = "'{$val}'";
+                    $this->paramTypeList .= $this->_determineType($val);
+                }
+
+                $this->query .= '(' . implode($keys, ', ') . ')';
+                $this->query .= ' VALUES(';
+                while ($num !== 0) {
+                    $this->query .= '?, ';
+                    $num--;
+                }
+                $this->query = rtrim($this->query, ', ');
+                $this->query .= ')';
+            }
+
+            $pos = strpos($this->query, 'UPDATE');
+            if ($pos !== false) {
+                foreach ($tableData as $prop => $value) {
+                    // determines what data type the item is, for binding purposes.
+                    $this->paramTypeList .= $this->_determineType($value);
+
+                    // prepares the reset of the SQL query.
+                    $this->query .= ($prop . ' = ?, ');
+                }
+                $this->query = rtrim($this->query, ', ');
+            }
+        }
+
+        // Did the user call the custom "where" method?
+        if (!empty($this->customWhere)) {
+            $this->query .= ' WHERE ';
+            $this->query .= implode(' AND ', $this->customWhere);
+        }
+
         // Did the user call the "where" method?
         if (!empty($this->where)) {
 
-            // if update data was passed, filter through and create the SQL query, accordingly.
-            if ($hasTableData) {
-                $pos = strpos($this->query, 'UPDATE');
-                if ($pos !== false) {
-                    foreach ($tableData as $prop => $value) {
-                        // determines what data type the item is, for binding purposes.
-                        $this->paramTypeList .= $this->_determineType($value);
-
-                        // prepares the reset of the SQL query.
-                        $this->query .= ($prop . ' = ?, ');
-                    }
-                    $this->query = rtrim($this->query, ', ');
-                }
+            if (!empty($this->customWhere)) {
+                $this->query .= ' AND ';
+            } else {
+                $this->query .= ' WHERE ';
             }
 
+            $where = array();
+
             //Prepare the where portion of the query
-            $this->query .= ' WHERE ';
             foreach ($this->where as $column => $value) {
                 $comparison = ' = ? ';
                 if (is_array($value)) {
@@ -652,63 +728,78 @@ class MysqliDb extends mysqli
                     $this->whereTypeList .= $this->_determineType($value);
                 }
                 // Prepares the reset of the SQL query.
-                $this->query .= ($column . $comparison . ' AND ');
+                $where[] = $column . $comparison;
             }
-            $this->query = rtrim($this->query, ' AND ');
-        }
-
-        // Did the user call the "customWhere" method?
-        if (!empty($this->customWhere)) {
-            //is this the only "where"?
-            $this->query .= (!empty($this->where)) ? ' AND ' : ' WHERE ';
-            $this->query .= $this->customWhere;
+            $this->query .= implode(' AND ', $where);
         }
 
         // Did the user call the "groupBy" method?
         if (!empty($this->groupBy)) {
+
             $this->query .= " GROUP BY ";
+            $groupBy = array();
+
             foreach ($this->groupBy as $key => $value) {
                 // prepares the reset of the SQL query.
-                $this->query .= $value . ", ";
+                $groupBy[] = $value;
             }
-            $this->query = rtrim($this->query, ', ') . " ";
+            $this->query .= ' '.implode(", ", $groupBy);
+        }
+
+        // Did the user call the "having" method?
+        if (!empty ($this->having)) {
+
+            $this->query .= ' HAVING ';
+            $having = array();
+
+            //Prepare the where portion of the query
+            foreach ($this->having as $column => $value) {
+                $comparison = ' = ? ';
+                if (is_array($value)) {
+                    // if the value is an array, then this isn't a basic = comparison
+                    $key = key($value);
+                    $val = $value[$key];
+                    switch (strtolower($key)) {
+                        case 'in':
+                            $comparison = ' IN (';
+                            foreach ($val as $v) {
+                                $comparison .= ' ?,';
+                                $this->whereTypeList .= $this->_determineType($v);
+                            }
+                            $comparison = rtrim($comparison, ',') . ' ) ';
+                            break;
+                        case 'between':
+                            $comparison = ' BETWEEN ? AND ? ';
+                            $this->whereTypeList .= $this->_determineType($val[0]);
+                            $this->whereTypeList .= $this->_determineType($val[1]);
+                            break;
+                        default:
+                            // We are using a comparison operator with only one parameter after it
+                            $comparison = ' ' . $key . ' ? ';
+                            // Determines what data type the where column is, for binding purposes.
+                            $this->whereTypeList .= $this->_determineType($val);
+                    }
+                } else {
+                    // Determines what data type the where column is, for binding purposes.
+                    $this->whereTypeList .= $this->_determineType($value);
+                }
+                // Prepares the reset of the SQL query.
+                $having[] = $column . $comparison;
+            }
+            $this->query .= implode(' AND ', $having);
         }
 
         // Did the user call the "orderBy" method?
         if (!empty ($this->orderBy)) {
+
             $this->query .= " ORDER BY ";
+            $orderBy = array();
+
             foreach ($this->orderBy as $prop => $value) {
                 // prepares the reset of the SQL query.
-                $this->query .= $prop . " " . $value . ", ";
+                $orderBy[] = $prop . " " . $value;
             }
-            $this->query = rtrim($this->query, ', ') . " ";
-        }
-
-        // Determine if is INSERT query
-        if ($hasTableData) {
-            $pos = strpos($this->query, 'INSERT');
-
-            if ($pos !== false) {
-                //is insert statement
-                $keys = array_keys($tableData);
-                $values = array_values($tableData);
-                $num = count($keys);
-
-                // wrap values in quotes
-                foreach ($values as $key => $val) {
-                    $values[$key] = "'{$val}'";
-                    $this->paramTypeList .= $this->_determineType($val);
-                }
-
-                $this->query .= '(' . implode($keys, ', ') . ')';
-                $this->query .= ' VALUES(';
-                while ($num !== 0) {
-                    $this->query .= '?, ';
-                    $num--;
-                }
-                $this->query = rtrim($this->query, ', ');
-                $this->query .= ')';
-            }
+            $this->query .= implode(", ", $orderBy);
         }
 
         // Did the user call the "limit" method?
@@ -797,6 +888,11 @@ class MysqliDb extends mysqli
             {
                 //return the insert_id if available, otherwise return true/false for success
                 $this->db_result = ($this->stmt->insert_id > 0) ? $this->stmt->insert_id : $this->db_result;
+            }
+            elseif(false!==strpos($this->query, 'REPLACE'))
+            {
+                //return the number of affected rows if any, otherwise return true/false for success
+                $this->db_result = ($this->stmt->affected_rows > 0) ? $this->stmt->affected_rows : $this->db_result;
             }
             else
             {
@@ -940,11 +1036,13 @@ class MysqliDb extends mysqli
     }
 
     /**
+     * @static
      * @param $string
      * @param array $deliminators
+     * @param int $size
      * @return array
      */
-    public function multiExplode($string, $deliminators = array())
+    public static function multiExplode($string, $deliminators = array(), $size = null)
     {
         if(empty($deliminators)){
             $deliminators = array(",",".","|",":","_");
@@ -952,12 +1050,71 @@ class MysqliDb extends mysqli
 
         //replace all deliminators with a single one
         $string = str_replace($deliminators, $deliminators[0], $string);
-        $array = explode($deliminators[0], $string);
+        $array = explode($deliminators[0], $string, $size);
         $clean = array();
         foreach($array as $r){
             $clean[] = trim($r);
         }
+        if(!is_null($size)){
+            $clean = array_pad($clean, $size, 0);
+        }
         return $clean;
+    }
+
+	public static function isValidArray($xList){
+		if(empty($xList))
+			return false;
+
+		if(is_array($xList) || is_object($xList))
+			return true;
+
+		return false;
+	}
+
+    /**
+     * @static
+     * @param $d
+     * @return array
+     */
+    public static function objectToArray($d)
+    {
+        if (is_object($d)) {
+            // Gets the properties of the given object
+            // with get_object_vars function
+            $d = get_object_vars($d);
+        }
+
+        if (is_array($d)) {
+            /*
+            * Return array converted to object
+            * Using __FUNCTION__ (Magic constant)
+            * for recursive call
+            */
+            return array_map(array(__CLASS__, __FUNCTION__), $d);
+        } else {
+            // Return array
+            return $d;
+        }
+    }
+
+    /**
+     * @static
+     * @param $d
+     * @return object
+     */
+    public static function arrayToObject($d)
+    {
+        if (is_array($d)) {
+            /*
+            * Return array converted to object
+            * Using __FUNCTION__ (Magic constant)
+            * for recursive call
+            */
+            return (object)array_map(array(__CLASS__, __FUNCTION__), $d);
+        } else {
+            // Return object
+            return $d;
+        }
     }
 
 }
